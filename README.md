@@ -2,7 +2,7 @@
 
 A full-stack arbitrage betting system that scrapes odds across multiple sportsbooks, finds risk-free betting opportunities, and presents them on a modern dashboard.
 
-Features
+# Features
 
 Integrates with The Odds API for live odds
 
@@ -20,7 +20,7 @@ FastAPI + PostgreSQL backend with clean data models
 
 Secure with .env file for API keys and DB credentials
 
-Project Structure
+# Project Structure
 arbitrage-bot/
 │
 ├── backend/              # FastAPI backend
@@ -39,18 +39,18 @@ arbitrage-bot/
 ├── README.md             # This file
 └── useful.txt            # Notes/resources
 
-Installation
+# Installation
 1. Clone the repository
 git clone https://github.com/your-username/arbitrage-bot.git
 cd arbitrage-bot
 
-2. Backend Setup
+# 2. Backend Setup
 cd backend
 python -m venv .venv
 source .venv/bin/activate   # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-3. Setup PostgreSQL
+# 3. Setup PostgreSQL
 
 Create a database:
 
@@ -58,31 +58,31 @@ CREATE DATABASE arbdb;
 CREATE USER arbuser WITH PASSWORD 'yourpassword';
 GRANT ALL PRIVILEGES ON DATABASE arbdb TO arbuser;
 
-4. Configure Environment
+# 4. Configure Environment
 
 Create a .env file in /backend (not pushed to GitHub):
 
 ODDS_API_KEY=your_api_key_here
 DATABASE_URL=postgresql://arbuser:yourpassword@localhost:5432/arbdb
 
-Usage
-1. Initialize the database
+# Usage
+# 1. Initialize the database
 python init_db.py
 
-2. Fetch and store odds
+# 2. Fetch and store odds
 python fetch_odds.py
 
-3. Run the FastAPI server
+# 3. Run the FastAPI server
 uvicorn main:app --reload
 
 
 API available at: http://127.0.0.1:8000/arbitrage
 
-4. Open the Frontend
+# 4. Open the Frontend
 
 Open /frontend/index.html in your browser for the dashboard.
 
-Supported Sportsbooks (Canada-focused)
+# Supported Sportsbooks (Canada-focused)
 
 DraftKings
 
@@ -114,18 +114,3 @@ TonyBet
 
 Security
 
-Secrets are stored in .env (ignored by Git)
-
-An .env.example can be provided to guide setup
-
-Do not commit your real API keys or database passwords
-
-Roadmap
-
-Add more betting markets (totals, spreads)
-
-Multi-sport filtering on frontend
-
-Real-time odds refresh with WebSockets
-
-Deploy backend to a cloud service
