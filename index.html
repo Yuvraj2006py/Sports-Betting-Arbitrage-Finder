@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Arbitrage Dashboard</title>
+    <!-- Tailwind CDN (for styling) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React 18 (CDN) + Babel so you can just open this file in a browser -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      html, body { height: 100%; background: #0f172a; }
+      .card { background: #0b1222; border: 1px solid rgba(255,255,255,0.06); }
+      .glass { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); }
+      .chip { background: rgba(148,163,184,0.12); border: 1px solid rgba(148,163,184,0.22); }
+    </style>
+  </head>
+  <body class="text-slate-100">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useEffect, useMemo, useState } = React;
+
+      // ====== CONFIG ======
+      const API_BASE = "http://127.0.0.1:8000"; // your FastAPI backend
+
+      // ====== UTILS ======
+      const fmtPct = (x) => `${(x*100).toFixed(2)}%`;
+      const fmt2 = (x) => Number(x).toFixed(2);
+      const cx = (...a) => a.filter(Boolean).join(" ");
+
+      function calcPlan(outcomes, bankroll) {
+        const invSum = outcomes.reduce((s, o) => s + 1/Number(o.odds), 0);
+        const stakeShares = outcomes.map(o => (1/Number(o.odds))/invSum);
+        const stakes = stakeShares.map(sh => bankroll * sh);
+        const payouts = stakes.map((st, i) => st * Number(outcomes[i].odds));
+        const guaranteedPayout = payouts.length ? payouts[0] : 0;
+        const totalStake = stakes.reduce((a,b) => a+b, 0);
+        const profit = guaranteedPayout - totalStake;
+        const margin = totalStake > 0 ? profit / totalStake : 0;
+        return { stakeShares, stakes, guaranteedPayout, totalStake, profit, margin };
+      }
+
+      function Tag({ children }){
+        return <span className="chip text-xs px-2 py-1 rounded-xl text-slate-200">{children}</span>;
+      }
+
+      function OutcomeRow({ o, stake, share }){
+        return (
+          <div className="grid grid-cols-12 gap-2 items-center text-sm">
+            <div className="col-span-3 truncate"><Tag>{o.sportsbook}</Tag></div>
+            <div className="col-span-3 truncate">{o.outcome}</div>
+            <div className="col-span-3 text-right">
+              @ {fmt2(o.odds)} 
+              {o.odds_american && (
+                <span className="text-slate-400 ml-1">({o.odds_american})</span>
+              )}
+            </div>
+            <div className="col-span-2 text-right">
+              ${fmt2(stake)} <span className="text-slate-400">({fmtPct(share)})</span>
+            </div>
+            <div className="col-span-1 text-right">
+              {o.date ? new Date(o.date).toLocaleDateString() : ""}
+            </div>
+          </div>
+        );
+      }
+
+      function ArbCard({ opp, bankroll }){
+        const [expanded, setExpanded] = useState(false);
+        const plan = useMemo(()=>calcPlan(opp.best_odds, bankroll), [opp, bankroll]);
+        const { stakes, stakeShares, totalStake, guaranteedPayout, profit } = plan;
+
+        return (
+          <div className="card rounded-2xl p-5 hover:shadow-xl transition-shadow">
+            <div className="flex items-start gap-3 justify-between">
+              <div className="min-w-0">
+                <div className="text-xl font-semibold truncate">{opp.event}</div>
+                <div className="text-slate-400 text-sm mt-1">
+                  Market: <span className="text-slate-200 font-medium">{opp.market.toUpperCase()}</span>
+                </div>
+                {opp.commence_time && (
+                  <div className="text-slate-400 text-sm mt-1">
+                    Starts: <span className="text-slate-200 font-medium">
+                      {new Date(opp.commence_time).toLocaleString()}
+                    </span>
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2 mt-3">
+                  <Tag>{opp.best_odds.length}-way</Tag>
+                  <Tag>Margin {fmtPct(opp.profit_margin/100)}</Tag>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-slate-400">Total Stake</div>
+                <div className="text-lg font-semibold">${fmt2(totalStake)}</div>
+                <div className="text-sm text-slate-400 mt-1">Guaranteed Profit</div>
+                <div className="text-lg font-semibold text-emerald-400">${fmt2(profit)}</div>
+              </div>
+            </div>
+
+            <div className="mt-4 border-t border-slate-800 pt-4 space-y-2">
+              {opp.best_odds.map((o, i) => (
+                <OutcomeRow key={i} o={o} stake={stakes[i]} share={stakeShares[i]} />
+              ))}
+            </div>
+
+            {expanded && (
+              <pre className="mt-4 text-xs bg-black/40 p-3 rounded-xl overflow-x-auto">{JSON.stringify(opp, null, 2)}</pre>
+            )}
+          </div>
+        );
+      }
+
+      function App(){
+        const [bankroll, setBankroll] = useState(100);
+        const [minMargin, setMinMargin] = useState(0);
+        const [search, setSearch] = useState("");
+        const [auto, setAuto] = useState(false);
+        const [loading, setLoading] = useState(false);
+        const [error, setError] = useState("");
+        const [data, setData] = useState([]);
+
+        const fetchArbs = async () => {
+          try {
+            setLoading(true); setError("");
+            const res = await fetch(`${API_BASE}/arbitrage`);
+            if(!res.ok) throw new Error(`HTTP ${res.status}`);
+            const json = await res.json();
+            json.sort((a,b) => (b.profit_margin||0) - (a.profit_margin||0));
+            setData(json);
+          } catch(e){
+            setError(String(e));
+          } finally {
+            setLoading(false);
+          }
+        };
+
+        useEffect(()=>{ fetchArbs(); }, []);
+        useEffect(()=>{
+          if(!auto) return;
+          const id = setInterval(fetchArbs, 10_000);
+          return () => clearInterval(id);
+        }, [auto]);
+
+        const filtered = useMemo(()=>{
+          const q = search.toLowerCase();
+          return data
+            .filter(o => ((o.profit_margin||0)/100) >= minMargin)
+            .filter(o => !q || `${o.event} ${o.market} ${o.best_odds.map(x=>x.sportsbook+" "+x.outcome).join(" ")}`.toLowerCase().includes(q));
+        }, [data, minMargin, search]);
+
+        return (
+          <div className="max-w-7xl mx-auto p-6 space-y-6">
+            <header className="flex items-center justify-between">
+              <h1 className="text-2xl sm:text-3xl font-bold">Arbitrage Opportunities</h1>
+              <div className="flex items-center gap-2">
+                <button onClick={fetchArbs} className="bg-indigo-500 hover:bg-indigo-600 rounded-xl px-4 py-2 font-medium">Refresh</button>
+              </div>
+            </header>
+
+            {error && (
+              <div className="glass rounded-xl p-4 text-rose-300 border-rose-800/40">{error}</div>
+            )}
+
+            {loading && (
+              <div className="text-slate-300">Loading…</div>
+            )}
+
+            {!loading && filtered.length === 0 && (
+              <div className="text-slate-400">No opportunities found. Try lowering filters or refreshing.</div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {filtered.map((opp, idx) => (
+                <ArbCard key={idx} opp={opp} bankroll={bankroll} />
+              ))}
+            </div>
+
+            <footer className="text-xs text-slate-500 pt-4 border-t border-slate-800">
+              Data from your FastAPI backend at <code>{API_BASE}</code>. Ensure CORS is enabled.
+            </footer>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+    </script>
+  </body>
+</html>
