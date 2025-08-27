@@ -1,4 +1,4 @@
-Arbitrage Betting Bot
+# Arbitrage Betting Bot
 
 A full-stack arbitrage betting system that scrapes odds across multiple sportsbooks, finds risk-free betting opportunities, and presents them on a modern dashboard.
 
